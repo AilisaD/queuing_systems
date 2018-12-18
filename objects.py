@@ -61,7 +61,7 @@ class Patient:
         return self._visits
 
     def add_visit(self, type_: str, waiting_time: float, service_time: float):
-        if type_ not in ('therapist', 'doctor'):
+        if type_ not in ('registry', 'therapist', 'doctor'):
             raise ValueError(type_)
 
         waiting_time = 0 if waiting_time < 1 else waiting_time
@@ -140,19 +140,30 @@ class Polyclinic:
     def must_continue_service(self):
         return self.r.random() <= self.probability_continue_service
 
-    def visit_registry(self):
+    def visit_registry(self, patient: Patient):
         """Посещение регистратуры."""
         with self.registry.request() as request:
 
             if self.registry.count:
                 self.queue_at_registry += 1
+                time = self.env.now
                 yield request
+                waiting_time = self.env.now - time
                 self.queue_at_registry -= 1
 
             else:
                 yield request
+                waiting_time = 0
 
+            time = self.env.now
             yield self.env.timeout(self.registry_process_time)
+            service_time = self.env.now - time
+
+            patient.add_visit(
+                type_='registry',
+                waiting_time=waiting_time,
+                service_time=service_time,
+            )
 
     def visit_therapist(self, patient: Patient):
         """Посещение свободного терапевта."""
@@ -206,7 +217,7 @@ class Polyclinic:
             service_time = self.env.now - time
 
             patient.add_visit(
-                type_='therapist',
+                type_='doctor',
                 waiting_time=waiting_time,
                 service_time=service_time,
             )
